@@ -248,6 +248,8 @@ pub enum FileError {
     InvalidUtf8,
     /// The package the file is part of could not be loaded.
     Package(PackageError),
+    /// File already exists
+    AlreadyExists,
     /// Another error.
     Other,
 }
@@ -280,6 +282,7 @@ impl Display for FileError {
             Self::IsDirectory => f.pad("failed to load file (is a directory)"),
             Self::NotSource => f.pad("not a typst source file"),
             Self::InvalidUtf8 => f.pad("file is not valid utf-8"),
+            Self::AlreadyExists => f.pad("file does already exist"),
             Self::Package(error) => error.fmt(f),
             Self::Other => f.pad("failed to load file"),
         }

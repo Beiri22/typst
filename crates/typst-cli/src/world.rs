@@ -129,6 +129,21 @@ impl World for SystemWorld {
         self.slot(id)?.file()
     }
 
+    fn write_file(&self, id: FileId, content: Bytes, overwrite: bool) -> FileResult<()>
+    {
+        let root = match id.package() {
+            Some(spec) => prepare_package(spec)?,
+            None => self.root.clone(),
+        };
+
+        // Join the path to the root. If it tries to escape, deny
+        // access. Note: It can still escape via symlinks.
+        let system_path =
+            root.join_rooted(id.path()).ok_or(FileError::AccessDenied)?;
+
+        write(&system_path, content.as_slice(), overwrite)
+    }
+
     fn font(&self, index: usize) -> Option<Font> {
         self.fonts[index].get()
     }
@@ -241,6 +256,16 @@ fn read(path: &Path) -> FileResult<Vec<u8>> {
         Err(FileError::IsDirectory)
     } else {
         fs::read(path).map_err(f)
+    }
+}
+
+/// Write a file.
+fn write(path: &Path, content: impl AsRef<[u8]>, overwrite: bool) -> FileResult<()> {
+    let f = |e| FileError::from_io(e, path);
+    if path.exists() && !overwrite {
+        Err(FileError::AlreadyExists)
+    } else {
+        fs::write(path, content).map_err(f)
     }
 }
 

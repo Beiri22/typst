@@ -123,6 +123,9 @@ pub trait World {
     /// Try to access the specified file.
     fn file(&self, id: FileId) -> FileResult<Bytes>;
 
+    /// Try to write to the specified file.
+    fn write_file(&self, id: FileId, content: Bytes, overwrite: bool) -> FileResult<()>;
+
     /// Try to access the font with the given index in the font book.
     fn font(&self, index: usize) -> Option<Font>;
 

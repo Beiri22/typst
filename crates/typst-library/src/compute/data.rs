@@ -1,5 +1,6 @@
 use typst::diag::{format_xml_like_error, FileError};
 use typst::eval::Datetime;
+use typst::util::{Bytes};
 
 use crate::prelude::*;
 
@@ -394,6 +395,61 @@ fn convert_yaml_key(key: serde_yaml::Value) -> Option<Str> {
 /// Format the user-facing YAML error message.
 fn format_yaml_error(error: serde_yaml::Error) -> EcoString {
     eco_format!("failed to parse yaml file: {}", error.to_string().trim())
+}
+
+/// Writes structured data to a YAML file.
+/// Typst dictionaries will be converted into AML mappings, and Typst arrays
+/// will be converted into YAML sequences. Strings and booleans will be converted
+/// into the YAML equivalents, `{none}` will be converted into null-values
+/// (`null`, `~` or empty ``) and numbers will be converted to floats or integers
+/// depending on whether they are whole numbers.
+///
+/// The function returns nothing.
+///
+/// Display: YAML
+/// Category: data-writing
+#[func]
+pub fn write_yaml(
+    /// Path to a YAML file.
+    path: Spanned<EcoString>,
+    /// Content to write.
+    content: Spanned<Value>,
+    /// Whether to overwrite existing files.
+    #[named]
+    #[default(false)]
+    overwrite: bool,
+    /// The virtual machine.
+    vm: &mut Vm,
+) -> SourceResult<Value> {
+    let Spanned { v: path, span: span_p } = path;
+    let Spanned { v: content, span: span_c } = content;
+    let id = vm.location().join(&path).at(span_p)?;
+
+    let yaml = convert_yaml_back(&content).at(span_c)?;
+    let bytes = serde_yaml::to_vec(&yaml).map_err(format_yaml_error).at(span_c)?;
+    vm.world().write_file(id, Bytes::from(bytes), overwrite).at(span_p)?;
+
+    Ok(Value::None)
+}
+
+/// Convert a YAML value to a Typst value.
+fn convert_yaml_back(value: &Value) -> Result<serde_yaml::Value, String> {
+    match value {
+        Value::None => Ok(serde_yaml::Value::Null),
+        Value::Bool(v) => Ok(serde_yaml::Value::from(v.to_owned())),
+        Value::Int(v) => Ok(serde_yaml::Value::from(v.to_owned())),
+        Value::Float(v) => Ok(serde_yaml::Value::from(v.to_owned())),
+        Value::Str(v) => Ok(serde_yaml::Value::from(v.as_str())),
+        Value::Bytes(v) => Ok(serde_yaml::Value::from(v.as_slice())),
+        Value::Array(v) => Ok(serde_yaml::Value::from(v.as_slice().iter().map(convert_yaml_back).collect::<Result<Vec<serde_yaml::Value>, String>>()?)),
+        Value::Dict(v) => {
+            let entries = v.iter()
+                .map(|(key, value)| Ok((serde_yaml::Value::from(key.as_str()), convert_yaml_back(value)?)))
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(serde_yaml::Value::from(serde_yaml::Mapping::from_iter(entries)))
+        },
+        _ => Err(format!("Cannot map type {} to yaml.", value.type_name()))
+    }
 }
 
 /// Reads structured data from an XML file.

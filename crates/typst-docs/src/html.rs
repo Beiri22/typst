@@ -503,6 +503,11 @@ impl World for DocWorld {
             .into())
     }
 
+    fn write_file(&self, _id: FileId, _content: Bytes, _overwrite: bool) -> FileResult<()>
+    {
+        Ok(())
+    }
+
     fn font(&self, index: usize) -> Option<Font> {
         Some(FONTS.1[index].clone())
     }
